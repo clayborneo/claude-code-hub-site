@@ -352,18 +352,19 @@ mark{background:color-mix(in srgb,var(--accent-2) 55%,transparent);color:inherit
     });
     const title = (pre.find(l => l.startsWith('# ')) || '# ').slice(2).replace(/\s*[—–-]\s*(Project Brain|Command Center).*$/, '').trim();
     const th = sections.find(s => s.key === 'threads');
-    const board = { heading: th ? th.heading : 'Open Threads (live TODO)', columns: [], cards: [], present: !!th };
+    const board = { heading: th ? th.heading : 'Open Threads (live TODO)', columns: [], cards: [], loose: {}, present: !!th };
     if (th) {
       let col = null, card = null;
       for (const line of th.lines) {
         const h = line.match(/^###\s+(.*)$/);
         if (h) { col = h[1].trim(); if (!board.columns.includes(col)) board.columns.push(col); card = null; continue; }
-        const m = line.match(/^\s*[-*]\s+\[(.)\]\s+(.*)$/);
-        if (m) { const text = m[2].trim(); const st = STATE_OF[m[1]] || 'todo'; const due = (text.match(/@due:(\d{4}-\d{2}-\d{2})/) || [])[1] || '';
-          const tags = [...text.matchAll(/@([\w\-:]+)/g)].map(x => x[1]).filter(t => !t.startsWith('due:'));
-          card = { id: 'c' + (++cardSeq), title: text.replace(/\s*@[\w\-:]+/g, '').trim(), state: st, due, tags: [...new Set(tags)], notes: [], column: col || DEFAULT_COL_FOR[st] };
+        const m = line.match(/^[-*]\s+\[(.)\]\s+(.*)$/);          // top-level cards only; indented checklists are notes
+        if (m) { const text = m[2].trim(); const st = STATE_OF[m[1]] || 'todo'; const due = (text.match(/(?:^|\s)@due:(\d{4}-\d{2}-\d{2})(?=\s|$)/) || [])[1] || '';
+          const tags = [...text.matchAll(/(?:^|\s)@([\w\-:]+)/gu)].map(x => x[1]).filter(t => !t.startsWith('due:'));
+          card = { id: 'c' + (++cardSeq), title: text.replace(/(?:^|\s)@[\w\-:]+(?=\s|$)/gu, ' ').replace(/\s+/g, ' ').trim(), state: st, due, tags: [...new Set(tags)], notes: [], column: col || DEFAULT_COL_FOR[st] };
           board.cards.push(card); }
-        else if (card && /^\s+\S/.test(line)) card.notes.push(line.trim());
+        else if (card && /^\s+\S/.test(line)) card.notes.push(line.replace(/^ {0,2}/, '').replace(/\s+$/, ''));   // keep relative indentation
+        else if (line.trim()) { const k = col || ''; (board.loose[k] = board.loose[k] || []).push(line); card = null; }  // prose kept verbatim
       }
       for (const c of board.cards) { c.notes = c.notes.join('\n'); if (!board.columns.length && !DEFAULT_COLUMNS.includes(c.column)) c.column = 'To do'; }
       if (!board.columns.length) board.columns = [...DEFAULT_COLUMNS];
@@ -376,25 +377,28 @@ mark{background:color-mix(in srgb,var(--accent-2) 55%,transparent);color:inherit
   }
   function countCards(board) { const c = { todo:0, doing:0, done:0, dropped:0 }; for (const k of board.cards) c[colState(k.column)]++; return c; }
   function serializeBoard(board) {
-    const out = [];
+    const out = []; const loose = board.loose || {};
+    if (loose['']) out.push(...loose[''], '');
     for (const col of board.columns) {
       out.push(`### ${col}`);
+      if (loose[col]) out.push(...loose[col]);
       for (const c of board.cards.filter(k => k.column === col)) {
         const bits = [c.title.trim()]; if (c.due) bits.push('@due:' + c.due); for (const t of c.tags) bits.push('@' + t);
         out.push(`- [${STATE_CHAR[colState(col)]}] ${bits.join(' ')}`);
-        for (const n of (c.notes || '').split('\n')) if (n.trim()) out.push('  ' + n.trim());
+        for (const n of (c.notes || '').split('\n')) if (n.trim()) out.push('  ' + n.replace(/\s+$/, ''));
       }
       out.push('');
     }
-    return out.join('\n').replace(/\n+$/, '') + '\n';
+    return out.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\n+$/, '') + '\n';
   }
   function applyBoard(doc) {
     const lines = doc.raw.split('\n'); const th = doc.sections.find(s => s.key === 'threads');
-    const body = serializeBoard(doc.board).split('\n');
+    const body = serializeBoard(doc.board).replace(/\n+$/, '').split('\n');
     let newLines;
     if (th) newLines = [...lines.slice(0, th.start + 1), ...body, ...(th.end < lines.length ? [''] : []), ...lines.slice(th.end)];
-    else { const idx = lines.findIndex((l, i) => i > 0 && l.startsWith('## ') && /decisions|gotcha|log/i.test(l)); const block = ['## Open Threads (live TODO)', ...body, '']; newLines = idx >= 0 ? [...lines.slice(0, idx), ...block, ...lines.slice(idx)] : [...lines, '', ...block]; }
-    return newLines.join('\n').replace(/\n{3,}/g, '\n\n');
+    else { if (!doc.board.columns.length) doc.board.columns = [...DEFAULT_COLUMNS]; const idx = lines.findIndex((l, i) => i > 0 && l.startsWith('## ') && /decisions|gotcha|log/i.test(l)); const block = ['## Open Threads (live TODO)', ...serializeBoard(doc.board).replace(/\n+$/, '').split('\n'), '']; newLines = idx >= 0 ? [...lines.slice(0, idx), ...block, ...lines.slice(idx)] : [...lines, '', ...block]; }
+    let s = newLines.join('\n'); if (!s.endsWith('\n')) s += '\n';
+    return s;
   }
 
   // ================= docs store =================
@@ -415,7 +419,16 @@ mark{background:color-mix(in srgb,var(--accent-2) 55%,transparent);color:inherit
     }));
     state.live = true; $('#livebadge').textContent = 'live'; $('#livebadge').classList.add('on');
   }
-  async function saveDoc(doc, message) {
+  // Saves are queued per document so rapid edits never race on the same sha. On a stale sha
+  // the latest file is fetched and the in-memory board (which owns the Open Threads section)
+  // is re-applied on top of it, once.
+  const saveQueues = new Map();
+  function saveDoc(doc, message) {
+    const prev = saveQueues.get(doc.id) || Promise.resolve(true);
+    const next = prev.then(() => doSave(doc, message, true)).catch(() => false);
+    saveQueues.set(doc.id, next); return next;
+  }
+  async function doSave(doc, message, retry) {
     if (!state.live) { toast('Read-only. Add a GitHub token in Settings to save changes.', true); return false; }
     const raw = applyBoard(doc);
     try {
@@ -424,11 +437,13 @@ mark{background:color-mix(in srgb,var(--accent-2) 55%,transparent);color:inherit
       Object.assign(doc, docFrom(doc, raw, sha), { board: doc.board, counts: countCards(doc.board) }); toast('Saved to GitHub');
       return true;
     } catch (e) {
-      if (e.status === 409 || e.status === 422) {
-        toast('Changed elsewhere; reloaded the latest version. Try again.', true);
-        const { sha, text } = await gh.get(doc.mirror); Object.assign(doc, docFrom(doc, text, sha)); route();
-      } else toast('Save failed: ' + e.message, true);
-      return false;
+      if ((e.status === 409 || e.status === 422) && retry) {
+        const { sha, text } = await gh.get(doc.mirror); Object.assign(doc, docFrom(doc, text, sha), { board: doc.board, counts: countCards(doc.board) });
+        toast('File changed elsewhere; re-applying your edit on the latest version.'); return doSave(doc, message, false);
+      }
+      toast('Save failed: ' + e.message + '. Reloading this board.', true);
+      try { const { sha, text } = await gh.get(doc.mirror); Object.assign(doc, docFrom(doc, text, sha)); } catch (_) {}
+      route(); return false;
     }
   }
 
