@@ -35,7 +35,7 @@ button,input,select,textarea{font:inherit}
 .btn{padding:7px 14px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--ink);cursor:pointer;font-weight:600;font-size:.9rem}
 .btn:hover{border-color:var(--accent)}
 .btn.primary{background:var(--accent);color:var(--on-accent,#fff);border-color:var(--accent)}
-.btn.danger{color:#b3261e;border-color:#b3261e55}
+.btn.danger{color:color-mix(in srgb,#c0392b 70%,var(--ink));border-color:#c0392b77}
 .btn.small{padding:3px 10px;font-size:.8rem}
 .btn[disabled]{opacity:.5;cursor:not-allowed}
 .wrap{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:0 20px 60px}
@@ -58,7 +58,7 @@ nav a.on,nav a:hover{background:var(--surface);border-color:var(--border);text-d
 #lock form{width:min(92vw,380px);padding:32px 28px;background:var(--surface);border:1px solid var(--border);border-radius:calc(var(--radius) + 6px);box-shadow:var(--shadow)}
 #lock h1{font-size:1.6rem}
 #lock p{color:var(--muted);margin:.2em 0 1.2em}
-#lock input{width:100%;padding:11px 13px;font:inherit;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--ink)}
+#lock input{width:100%;padding:11px 13px;font:inherit;border:1px solid var(--border);border-radius:var(--radius);background:var(--field);color:var(--ink)}
 #lock button{margin-top:12px;width:100%;padding:11px;font:inherit;font-weight:700;border:0;border-radius:var(--radius);background:var(--accent);color:var(--on-accent,#fff);cursor:pointer}
 #lock .err{color:#c0392b;min-height:1.3em;margin-top:8px;font-size:.9em}
 
@@ -77,7 +77,7 @@ nav a.on,nav a:hover{background:var(--surface);border-color:var(--border);text-d
 .pcard:hover{transform:translateY(-3px);text-decoration:none;box-shadow:0 14px 30px -12px rgba(0,0,0,.45)}
 .pcard h3{font-size:1.35rem;margin:0 0 4px;color:var(--ink)}
 .pcard .desc{color:var(--muted);font-size:.92em;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;margin:6px 0 12px}
-.chip{display:inline-block;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;padding:3px 9px;border-radius:999px;background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--ink);border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);font-family:var(--font-body)}
+.chip{display:inline-block;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;padding:3px 9px;border-radius:999px;background:var(--surface);color:var(--ink);border:1px solid color-mix(in srgb,var(--accent) 60%,var(--border));font-family:var(--font-body)}
 .chip.s-tbd,.chip.s-docs{opacity:.7}
 .bar{display:flex;height:8px;border-radius:999px;overflow:hidden;background:color-mix(in srgb,var(--ink) 12%,transparent);margin:8px 0 6px}
 .bar i{display:block;height:100%}
@@ -109,15 +109,15 @@ nav a.on,nav a:hover{background:var(--surface);border-color:var(--border);text-d
 .card.dragging{opacity:.4}
 .card .tags{margin-top:6px;display:flex;gap:5px;flex-wrap:wrap;align-items:center}
 .card .tag,.tag{font-size:.72rem;padding:1px 8px;border-radius:999px;background:color-mix(in srgb,var(--accent-2) 22%,transparent);border:1px solid color-mix(in srgb,var(--accent-2) 55%,transparent);font-family:var(--font-body);font-style:normal}
-.card .due{font-size:.72rem;padding:1px 8px;border-radius:999px;border:1px solid var(--border);background:var(--bg);font-family:var(--font-body)}
+.card .due{font-size:.72rem;padding:1px 8px;border-radius:999px;border:1px solid var(--border);background:var(--field);font-family:var(--font-body)}
 .card .due.soon{border-color:#d9a400;background:#d9a40022}
-.card .due.late{border-color:#c0392b;background:#c0392b22;color:#c0392b}
+.card .due.late{border-color:#c0392b;background:#c0392b22;color:color-mix(in srgb,#c0392b 70%,var(--ink))}
 .card .note-ind{font-size:.75rem;color:var(--muted);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .card p{margin:0}
 .col.done .card{opacity:.72}
 .col.done .card p{text-decoration:line-through;text-decoration-color:color-mix(in srgb,var(--ink) 40%,transparent)}
 .col.dropped{border-style:dashed}
-.col.dropped .card{opacity:.5;font-style:italic}
+.col.dropped .card{opacity:.65;font-style:italic}
 .placeholder{height:44px;border:2px dashed color-mix(in srgb,var(--accent) 55%,transparent);border-radius:var(--radius);margin-bottom:9px}
 .empty{color:var(--muted);font-size:.88em;padding:8px 6px;font-style:italic}
 .qadd{margin-top:4px}
@@ -139,20 +139,22 @@ details.panel.wide{grid-column:1/-1}
 .log-entry h4{font-size:.85rem;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin:0 0 4px;font-family:var(--font-body)}
 .hint{font-size:.82rem;color:var(--muted);margin:-8px 0 16px}
 .hint code{font-size:.85em}
-.ro{background:#d9a40022;border:1px solid #d9a40088;border-radius:var(--radius);padding:8px 12px;font-size:.88em;margin:0 0 14px}
+.ro{background:var(--surface);color:var(--ink);border:1px solid #d9a400;border-left:5px solid #d9a400;border-radius:var(--radius);padding:8px 12px;font-size:.88em;margin:0 0 14px}
 
 /* ---------- modal / toast ---------- */
 .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:40;display:grid;place-items:center;padding:20px}
 .modal{width:min(94vw,560px);max-height:90vh;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:calc(var(--radius) + 6px);box-shadow:0 20px 50px -20px rgba(0,0,0,.6);padding:22px 24px}
 .modal h2{font-size:1.3rem;margin-bottom:12px}
 .modal label{display:block;font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:12px 0 4px}
-.modal input,.modal select,.modal textarea{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--ink)}
+.modal input,.modal select,.modal textarea{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--field);color:var(--ink)}
+.modal input:focus,.modal select:focus,.modal textarea:focus,.qadd textarea:focus,#lock input:focus,.colname input:focus{outline:2px solid color-mix(in srgb,var(--accent) 55%,transparent);outline-offset:1px;border-color:var(--accent)}
+.modal select{appearance:auto}
 .modal textarea{min-height:110px;resize:vertical}
 .modal .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
 .modal .actions .left{margin-right:auto}
 .modal p.help{color:var(--muted);font-size:.9em;margin:.4em 0}
 #toast{position:fixed;right:18px;bottom:18px;z-index:60;display:flex;flex-direction:column;gap:8px}
-#toast div{background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:999px;font-size:.9rem;box-shadow:0 8px 20px -8px rgba(0,0,0,.6);animation:fade 3.2s forwards}
+#toast div{background:#1c1f24;color:#f3f0e8;padding:9px 14px;border-radius:999px;font-size:.9rem;box-shadow:0 8px 20px -8px rgba(0,0,0,.6);animation:fade 3.2s forwards;font-family:'Space Grotesk',system-ui,sans-serif}
 #toast div.err{background:#b3261e;color:#fff;animation-duration:6s}
 @keyframes fade{0%{opacity:0;transform:translateY(6px)}8%{opacity:1;transform:none}85%{opacity:1}100%{opacity:0}}
 
@@ -175,7 +177,11 @@ mark{background:color-mix(in srgb,var(--accent-2) 55%,transparent);color:inherit
 
 /* =====================================================================
    THEMES
+   Every theme must keep these readable: --ink on --surface (cards, panels, modals),
+   --ink on --field (inputs), --on-accent on --accent (primary buttons), --muted on --surface.
+   --field defaults to a slightly tinted --surface so inputs never inherit the page background.
    ===================================================================== */
+[data-theme]{--field:color-mix(in srgb,var(--surface) 92%,var(--ink))}
 [data-theme=atlas]{--bg:#12161c;--surface:#1b2129;--ink:#e8e4da;--muted:#9aa3ad;--accent:#d8a24a;--accent-2:#4fb4a8;--on-accent:#12161c;--border:#2d3641;--code-bg:#0d1014;--radius:8px;--shadow:0 6px 18px -10px rgba(0,0,0,.7);--font-display:'Space Grotesk',system-ui,sans-serif;--font-body:'Space Grotesk',system-ui,sans-serif;--font-mono:'JetBrains Mono',monospace;--display-weight:700;
   --bg-texture:radial-gradient(circle at 20% 10%,rgba(216,162,74,.10),transparent 40%),radial-gradient(circle at 85% 90%,rgba(79,180,168,.10),transparent 45%),repeating-linear-gradient(0deg,transparent 0 39px,rgba(255,255,255,.025) 39px 40px),repeating-linear-gradient(90deg,transparent 0 39px,rgba(255,255,255,.025) 39px 40px);--texture-opacity:1}
 
@@ -261,7 +267,7 @@ mark{background:color-mix(in srgb,var(--accent-2) 55%,transparent);color:inherit
 [data-theme=marigold] .phead h1{font-style:italic;font-weight:300}
 [data-theme=marigold] .phead h1::after{content:" ✦";color:#e0991a;font-style:normal}
 [data-theme=marigold] .card{border-left:3px solid var(--accent)}
-[data-theme=marigold] .chip{background:color-mix(in srgb,var(--accent-2) 20%,transparent);border-color:var(--accent-2);color:#0e5a5c;font-weight:700}
+[data-theme=marigold] .chip{background:var(--surface);border-color:var(--accent-2);color:#0e5a5c;font-weight:700}
 </style>
 </head>
 <body>
