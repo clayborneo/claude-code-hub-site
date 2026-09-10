@@ -141,6 +141,29 @@ details.panel.wide{grid-column:1/-1}
 .hint code{font-size:.85em}
 .ro{background:var(--surface);color:var(--ink);border:1px solid #d9a400;border-left:5px solid #d9a400;border-radius:var(--radius);padding:8px 12px;font-size:.88em;margin:0 0 14px}
 
+/* ---------- quick capture ---------- */
+.capture{background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:calc(var(--radius) + 4px);padding:14px 16px;margin:0 0 18px;box-shadow:var(--shadow)}
+.cap-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.cap-head h2{font-size:1.15rem;margin:0}
+.cap-sub{font-size:.8rem;color:var(--muted)}
+.cap-form{display:flex;gap:8px;align-items:stretch}
+.cap-form textarea{flex:1;min-height:52px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--field);color:var(--ink);resize:vertical;font-size:1rem}
+.cap-form .btn{align-self:stretch;padding:0 20px}
+@media (max-width:600px){.cap-form{flex-direction:column}.cap-form .btn{padding:10px}}
+.cap-list{list-style:none;padding:0;margin:12px 0 0}
+.cap{display:flex;justify-content:space-between;gap:14px;padding:9px 0;border-top:1px dashed var(--border);flex-wrap:wrap}
+.cap-text{flex:1 1 60%;min-width:220px}
+.cap-extra{font-size:.9em;color:var(--muted);margin-top:2px}
+.cap-meta{font-size:.8rem;color:var(--muted);text-align:right;flex:0 1 auto}
+.cap-state{display:inline-block;padding:1px 8px;border-radius:999px;border:1px solid #d9a400;background:#d9a40022;color:var(--ink);font-size:.72rem;text-transform:uppercase;letter-spacing:.06em}
+.cap-state.ok{border-color:var(--accent-2);background:color-mix(in srgb,var(--accent-2) 20%,transparent)}
+.cap-result{margin-top:4px;text-align:right;color:var(--ink)}
+.cap.done .cap-text{opacity:.75}
+.cap-done{margin-top:8px}
+.cap-done summary{cursor:pointer;color:var(--muted);font-size:.85rem}
+.cap-badge{color:#b8860b;font-weight:700}
+.linkish{background:none;border:0;padding:0;color:var(--muted);text-decoration:underline;cursor:pointer;font-size:inherit}
+
 /* ---------- modal / toast ---------- */
 .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:40;display:grid;place-items:center;padding:20px}
 .modal{width:min(94vw,560px);max-height:90vh;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:calc(var(--radius) + 6px);box-shadow:0 20px 50px -20px rgba(0,0,0,.6);padding:22px 24px}
@@ -353,7 +376,7 @@ mark{background:color-mix(in srgb,var(--accent-2) 55%,transparent);color:inherit
   };
 
   // ================= markdown model (mirrors build.py) =================
-  const SECTION_KEYS = [['what',/what this is|overview|what it is/],['state',/project state|current state|status/],['threads',/open threads|todo|to-do|next steps/],['decisions',/decisions|insights/],['gotchas',/gotcha/],['crosschecks',/cross-?check/],['log',/^log|\blog\b/],['imported',/imported from auto-memory/],['people',/^clay\b|who you are working with|how we work|working agreements/],['index',/project index/],['protocol',/how to use this file|protocol/],['recurring',/recurring/],['site',/command center site/]];
+  const SECTION_KEYS = [['inbox',/^inbox|notes? (from|to) cla/],['what',/what this is|overview|what it is/],['state',/project state|current state|status/],['threads',/open threads|todo|to-do|next steps/],['decisions',/decisions|insights/],['gotchas',/gotcha/],['crosschecks',/cross-?check/],['log',/^log|\blog\b/],['imported',/imported from auto-memory/],['people',/^clay\b|who you are working with|how we work|working agreements/],['index',/project index/],['protocol',/how to use this file|protocol/],['recurring',/recurring/],['site',/command center site/]];
   const classify = h => { const t = h.replace(/[^\w\s\-&/]/g,'').trim().toLowerCase(); for (const [k, rx] of SECTION_KEYS) if (rx.test(t)) return k; return 'other'; };
   const DEFAULT_COLUMNS = ['To do', 'In progress', 'Done', 'Deprecated'];
   const colState = name => /deprecat|dropped|cancel|won.?t|archive|parked/i.test(name) ? 'dropped' : /done|complete|shipped|finished/i.test(name) ? 'done' : /progress|doing|active|now|current/i.test(name) ? 'doing' : 'todo';
@@ -388,10 +411,52 @@ mark{background:color-mix(in srgb,var(--accent-2) 55%,transparent);color:inherit
       if (!board.columns.length) board.columns = [...DEFAULT_COLUMNS];
       for (const c of board.cards) if (!board.columns.includes(c.column)) board.columns.push(c.column);
     }
+    // Inbox: captures from Clay. `- [ ] cap-20260910-a1b2 · 2026-09-10 14:05 · text` with
+    // indented continuation lines; a line starting with "→" is Claude's receipt.
+    const ib = sections.find(s => s.key === 'inbox');
+    const inbox = { heading: ib ? ib.heading : 'Inbox (notes from Clay)', items: [], loose: [], present: !!ib };
+    if (ib) { let it = null;
+      for (const line of ib.lines) {
+        const m = line.match(/^[-*]\s+\[(.)\]\s+(cap-[\w-]+)\s+·\s+([\d-]+ [\d:]+)\s+·\s*(.*)$/);
+        if (m) { it = { id: m[2], ts: m[3], text: m[4].trim(), done: m[1].toLowerCase() === 'x', result: '', extra: [] }; inbox.items.push(it); }
+        else if (it && /^\s+\S/.test(line)) { const t = line.trim(); if (/^(→|->)/.test(t)) it.result = (it.result ? it.result + '\n' : '') + t.replace(/^(→|->)\s*/, ''); else it.extra.push(t); }
+        else if (line.trim()) { inbox.loose.push(line); it = null; }
+      }
+    }
     const logSec = sections.find(s => s.key === 'log'); const log = [];
     if (logSec) { let e = null; for (const l of logSec.lines) { const m = l.match(/^###\s+(.*)$/); if (m) { e = { date: m[1].trim(), md: [] }; log.push(e); } else if (e) e.md.push(l); } log.forEach(e => e.md = e.md.join('\n').trim()); }
     const what = (sections.find(s => s.key === 'what') || { lines: [] }).lines.join('\n').trim();
-    return { raw, title, sections: sections.map(s => ({ ...s, md: s.lines.join('\n').trim() })), board, log, what: /^_.*_$/.test(what) ? '' : what, counts: countCards(board) };
+    return { raw, title, sections: sections.map(s => ({ ...s, md: s.lines.join('\n').trim() })), board, inbox, log, what: /^_.*_$/.test(what) ? '' : what, counts: countCards(board) };
+  }
+  function serializeInbox(inbox) {
+    const out = [...(inbox.loose || [])];
+    for (const it of inbox.items) {
+      out.push(`- [${it.done ? 'x' : ' '}] ${it.id} · ${it.ts} · ${it.text.replace(/\s*\n\s*/g, ' ').trim()}`);
+      for (const e of it.extra || []) if (e.trim()) out.push('  ' + e.trim());
+      for (const r of (it.result || '').split('\n')) if (r.trim()) out.push('  → ' + r.trim());
+    }
+    return out.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\n+$/, '') + '\n';
+  }
+  function replaceSection(raw, key, heading, bodyText, insertAfterKey, insertBeforeRx) {
+    const lines = raw.split('\n'); const secs = []; let cur = null;
+    lines.forEach((line, i) => { if (line.startsWith('## ')) { cur = { key: classify(line.slice(3)), start: i, end: lines.length }; if (secs.length) secs[secs.length-1].end = i; secs.push(cur); } });
+    const body = bodyText.replace(/\n+$/, '').split('\n'); const th = secs.find(s => s.key === key);
+    let out;
+    if (th) out = [...lines.slice(0, th.start + 1), ...body, ...(th.end < lines.length ? [''] : []), ...lines.slice(th.end)];
+    else { const after = secs.find(s => s.key === insertAfterKey); let idx = after ? after.end : lines.findIndex((l, i) => i > 0 && l.startsWith('## ') && insertBeforeRx.test(l));
+      const block = ['## ' + heading, ...body, '']; out = idx >= 0 ? [...lines.slice(0, idx), ...block, ...lines.slice(idx)] : [...lines, '', ...block]; }
+    let s = out.join('\n'); if (!s.endsWith('\n')) s += '\n'; return s;
+  }
+  // Both editable sections (board, inbox) written back onto the file; everything else untouched.
+  function applyDoc(doc) {
+    let raw = applyBoard(doc);
+    if (doc.inbox && (doc.inbox.items.length || doc.inbox.present)) raw = replaceSection(raw, 'inbox', doc.inbox.heading, serializeInbox(doc.inbox), 'threads', /decisions|gotcha|log/i);
+    return raw;
+  }
+  function mergeInbox(mine, theirs) {  // union by id; my copy of an item wins, unknown items from the other side are kept
+    const ids = new Set(mine.items.map(i => i.id));
+    const extra = (theirs ? theirs.items : []).filter(i => !ids.has(i.id));
+    return { ...mine, present: mine.present || (theirs && theirs.present), loose: mine.loose.length ? mine.loose : (theirs ? theirs.loose : []), items: [...extra, ...mine.items].sort((a, b) => b.ts.localeCompare(a.ts)) };
   }
   function countCards(board) { const c = { todo:0, doing:0, done:0, dropped:0 }; for (const k of board.cards) c[colState(k.column)]++; return c; }
   function serializeBoard(board) {
@@ -448,16 +513,17 @@ mark{background:color-mix(in srgb,var(--accent-2) 55%,transparent);color:inherit
   }
   async function doSave(doc, message, retry) {
     if (!state.live) { toast('Read-only. Add a GitHub token in Settings to save changes.', true); return false; }
-    const raw = applyBoard(doc);
+    const raw = applyDoc(doc);
     try {
       const sha = await gh.put(doc.mirror, raw, doc.sha, message);
-      // keep the live board object (the DOM's closures point at it); refresh raw, sha and section offsets
-      Object.assign(doc, docFrom(doc, raw, sha), { board: doc.board, counts: countCards(doc.board) }); toast('Saved to GitHub');
+      // keep the live board and inbox objects (the DOM's closures point at them); refresh raw, sha and section offsets
+      Object.assign(doc, docFrom(doc, raw, sha), { board: doc.board, inbox: doc.inbox, counts: countCards(doc.board) }); toast('Saved to GitHub');
       return true;
     } catch (e) {
       if ((e.status === 409 || e.status === 422) && retry) {
-        const { sha, text } = await gh.get(doc.mirror); Object.assign(doc, docFrom(doc, text, sha), { board: doc.board, counts: countCards(doc.board) });
-        toast('File changed elsewhere; re-applying your edit on the latest version.'); return doSave(doc, message, false);
+        const { sha, text } = await gh.get(doc.mirror); const fresh = docFrom(doc, text, sha);
+        Object.assign(doc, fresh, { board: doc.board, inbox: mergeInbox(doc.inbox, fresh.inbox), counts: countCards(doc.board) });
+        toast('File changed elsewhere; re-applying your edit on the latest version.'); const ok = await doSave(doc, message, false); if (ok) route(); return ok;
       }
       toast('Save failed: ' + e.message + '. Reloading this board.', true);
       try { const { sha, text } = await gh.get(doc.mirror); Object.assign(doc, docFrom(doc, text, sha)); } catch (_) {}
@@ -528,7 +594,7 @@ mark{background:color-mix(in srgb,var(--accent-2) 55%,transparent);color:inherit
         <div class="desc">${esc(p.desc || p.what || '')}</div>
         ${p.stub ? '<div class="stub">No scratchpad yet. Created on the first real session.</div>' :
         `<div class="bar"><i class="todo" style="width:${100*p.counts.todo/n}%"></i><i class="doing" style="width:${100*p.counts.doing/n}%"></i><i class="done" style="width:${100*p.counts.done/n}%"></i></div>
-        <div class="meta"><span>${fmtCounts(p.counts)}${late ? ` · <span style="color:#c0392b">${late} overdue</span>` : ''}</span><span>${p.last_log ? 'log ' + esc(p.last_log) : ''}</span></div>`}</a>`; };
+        <div class="meta"><span>${fmtCounts(p.counts)}${late ? ` · <span style="color:#c0392b">${late} overdue</span>` : ''}${(p.inbox && p.inbox.items.filter(i=>!i.done).length) ? ` · <span class="cap-badge">${p.inbox.items.filter(i=>!i.done).length} note${p.inbox.items.filter(i=>!i.done).length===1?'':'s'} waiting</span>` : ''}</span><span>${p.last_log ? 'log ' + esc(p.last_log) : ''}</span></div>`}</a>`; };
     $('#app').innerHTML = `
       <div class="hero"><div><h1>Projects</h1><div class="sub">${state.live ? 'Live from GitHub. Edits here sync to the Markdown files.' : 'Snapshot built ' + esc(state.data.generated.replace('T',' ')) + '.'}</div></div>
         <div class="stats"><div class="stat"><b>${ps.filter(p=>!p.stub).length}</b><span>scratchpads</span></div><div class="stat"><b>${tot.todo}</b><span>to do</span></div><div class="stat"><b>${tot.doing}</b><span>in progress</span></div><div class="stat"><b>${tot.done}</b><span>done</span></div></div></div>
@@ -538,6 +604,34 @@ mark{background:color-mix(in srgb,var(--accent-2) 55%,transparent);color:inherit
   }
 
   const panel = (title, html, wide) => `<details class="panel${wide?' wide':''}" ${wide?'open':''}><summary>${esc(title)}</summary><div class="body prose">${html}</div></details>`;
+
+  // ---------- quick capture: "Note to Claude" with receipts ----------
+  const capId = () => { const d = new Date(); const b = crypto.getRandomValues(new Uint8Array(2)); return `cap-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}-${[...b].map(x=>x.toString(16).padStart(2,'0')).join('')}`; };
+  const nowStamp = () => { const d = new Date(), p = n => String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
+  const ago = ts => { const ms = Date.now() - new Date(ts.replace(' ', 'T')); const h = Math.round(ms / 36e5); return h < 1 ? 'just now' : h < 24 ? `${h}h ago` : `${Math.round(h/24)}d ago`; };
+  function renderCapture(doc) {
+    const items = (doc.inbox ? doc.inbox.items : []); const pending = items.filter(i => !i.done), done = items.filter(i => i.done);
+    const row = i => `<li class="cap ${i.done ? 'done' : ''}" data-cap="${esc(i.id)}"><div class="cap-text">${inline(i.text)}${(i.extra||[]).length ? '<div class="cap-extra">' + i.extra.map(e => inline(e)).join('<br>') + '</div>' : ''}</div>
+      <div class="cap-meta">${i.done ? '<span class="cap-state ok">Processed</span>' : '<span class="cap-state">Waiting for Claude</span>'} · ${esc(ago(i.ts))}${i.result ? '<div class="cap-result">' + inline(i.result) + '</div>' : ''}${i.done ? '' : ' · <button class="linkish cap-del">remove</button>'}</div></li>`;
+    return `<section class="capture" id="capture">
+      <div class="cap-head"><h2>Note to Claude</h2><span class="cap-sub">Saved to the scratchpad now. Claude reads it at the start of the next session.</span></div>
+      ${state.live ? `<form class="cap-form"><textarea id="cap-in" rows="2" placeholder="Anything: an idea, a task, a question, a decision, a link…"></textarea><button class="btn primary" type="submit">Send</button></form>` : '<div class="ro">Add a GitHub token in Settings to send notes from here.</div>'}
+      ${pending.length ? `<ul class="cap-list">${pending.map(row).join('')}</ul>` : ''}
+      ${done.length ? `<details class="cap-done"><summary>Processed (${done.length})</summary><ul class="cap-list">${done.slice(0, 30).map(row).join('')}</ul></details>` : ''}
+    </section>`;
+  }
+  function wireCapture(doc) {
+    const sec = $('#capture'); if (!sec || !state.live) return;
+    const form = sec.querySelector('.cap-form'); if (!form) return;
+    const ta = form.querySelector('textarea');
+    const submit = () => { const t = ta.value.trim(); if (!t) return; const lines = t.split('\n'); const item = { id: capId(), ts: nowStamp(), text: lines[0], extra: lines.slice(1).filter(l => l.trim()), done: false, result: '' };
+      doc.inbox.present = true; doc.inbox.items.unshift(item); ta.value = ''; route();
+      saveDoc(doc, `capture: "${item.text.slice(0, 60)}" (${doc.title})`).then(ok => { if (!ok) { doc.inbox.items = doc.inbox.items.filter(i => i.id !== item.id); route(); } }); };
+    form.addEventListener('submit', e => { e.preventDefault(); submit(); });
+    ta.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); } });
+    sec.addEventListener('click', e => { const b = e.target.closest('.cap-del'); if (!b) return; const id = b.closest('.cap').dataset.cap; if (!confirm('Remove this note before Claude sees it?')) return;
+      doc.inbox.items = doc.inbox.items.filter(i => i.id !== id); route(); saveDoc(doc, `capture: remove ${id} (${doc.title})`); });
+  }
 
   function renderBoard(doc) {
     const b = doc.board; const ro = !state.live;
@@ -557,7 +651,7 @@ mark{background:color-mix(in srgb,var(--accent-2) 55%,transparent);color:inherit
     const doc = state.docs.get(id); const meta = state.data.projects.find(p => p.id === id) || {};
     if (!doc) { setTheme(meta.theme || 'atlas'); $('#app').innerHTML = `<div class="phead"><div><h1>${esc(meta.title || id)}</h1><div class="desc">${esc(meta.desc||'')}</div><div class="path">No scratchpad yet. It gets created the first time Claude works in this folder.</div></div></div>`; return; }
     setTheme(doc.theme); setNav(''); document.title = doc.title + ' · Command Center';
-    const others = doc.sections.filter(s => !['threads','log','what','imported'].includes(s.key));
+    const others = doc.sections.filter(s => !['threads','log','what','imported','inbox'].includes(s.key));
     const panels = others.map(s => panel(s.heading.replace(/^[^\w]+/,''), md(s.md)));
     if (doc.log.length) panels.push(panel('Log', doc.log.map(e => `<div class="log-entry"><h4>${esc(e.date)}</h4>${md(e.md)}</div>`).join(''), true));
     const imp = doc.sections.find(s => s.key === 'imported'); if (imp) panels.push(`<details class="panel wide"><summary>Imported from auto-memory (raw seed, to be pruned)</summary><div class="body prose">${md(imp.md)}</div></details>`);
@@ -566,22 +660,23 @@ mark{background:color-mix(in srgb,var(--accent-2) 55%,transparent);color:inherit
         <div class="desc">${doc.what ? md(doc.what) : esc(doc.desc||'')}</div>
         <div class="path">Source: <code>${esc(doc.path || doc.mirror)}</code>${doc.updated ? ' · updated ' + doc.updated : ''}</div></div></div>
       ${state.live ? '' : '<div class="ro">Read-only snapshot. Open Settings and add a GitHub token to edit the board here; changes sync to the Markdown files.</div>'}
+      ${renderCapture(doc)}
       ${renderBoard(doc)}
       <div class="hint">Cards are the scratchpad's <em>Open Threads</em>. Drag between columns, click a card to edit, click a column name to rename it. Everything you change here is written back to the Markdown, so Claude sees it next session.</div>
       <div class="panels">${panels.join('')}</div>`;
-    wireBoard(doc);
+    wireCapture(doc); wireBoard(doc);
     if (openSection) { const d=[...document.querySelectorAll('details.panel')].find(x=>x.querySelector('summary').textContent.trim().toLowerCase().startsWith(openSection.toLowerCase())); if (d) { d.open = true; d.scrollIntoView({behavior:'smooth'}); } }
   }
 
   function viewHub() {
     const doc = state.docs.get('hub'); setTheme('atlas'); setNav('hub'); document.title = 'Hub · Command Center';
     if (!doc) { $('#app').innerHTML = '<p>No hub scratchpad.</p>'; return; }
-    const panels = doc.sections.filter(s=>!['threads','log','index'].includes(s.key)).map(s=>panel(s.heading.replace(/^[^\w]+/,''), md(s.md)));
+    const panels = doc.sections.filter(s=>!['threads','log','index','inbox'].includes(s.key)).map(s=>panel(s.heading.replace(/^[^\w]+/,''), md(s.md)));
     if (doc.log.length) panels.push(panel('Log', doc.log.map(e=>`<div class="log-entry"><h4>${esc(e.date)}</h4>${md(e.md)}</div>`).join(''), true));
-    $('#app').innerHTML = `<div class="phead"><div><h1>Hub</h1><div class="desc">Cross-project threads, who Clay is, how we work, shared gotchas. Source: <code>${esc(doc.path || 'SCRATCHPAD.md')}</code></div></div></div>
+    $('#app').innerHTML = `<div class="phead"><div><h1>Hub</h1><div class="desc">Cross-project threads, who Clay is, how we work, shared gotchas. Notes sent here are for anything that is not about one project. Source: <code>${esc(doc.path || 'SCRATCHPAD.md')}</code></div></div></div>
       ${state.live ? '' : '<div class="ro">Read-only snapshot. Add a GitHub token in Settings to edit.</div>'}
-      ${renderBoard(doc)}<div class="panels">${panels.join('')}</div>`;
-    wireBoard(doc);
+      ${renderCapture(doc)}${renderBoard(doc)}<div class="panels">${panels.join('')}</div>`;
+    wireCapture(doc); wireBoard(doc);
   }
 
   // ================= board interactions =================
