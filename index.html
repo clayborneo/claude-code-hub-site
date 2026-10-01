@@ -502,9 +502,29 @@ mark{background:color-mix(in srgb,var(--accent-2) 55%,transparent);color:inherit
     }));
     state.live = true; $('#livebadge').textContent = 'live'; $('#livebadge').classList.add('on');
   }
+  // Three-way merge for a stale save. `base` is the board this page last saw in the repo, `theirs` the
+  // board in the repo now, `mine` (changed in place: the DOM points at it) the board holding the edit
+  // being saved. Cards are matched by title. Whatever changed only in the repo is taken from the repo
+  // (a card the intake routine filed while this page sat open, a card finished on another device);
+  // whatever this page changed stays as the page has it.
+  function mergeBoard(mine, base, theirs) {
+    const same = (a, b) => a.column === b.column && (a.due || '') === (b.due || '') && (a.notes || '') === (b.notes || '') && a.tags.join(' ') === b.tags.join(' ');
+    const by = cards => { const m = new Map(); for (const c of cards) if (!m.has(c.title)) m.set(c.title, c); return m; };
+    const B = by(base.cards), T = by(theirs.cards), M = by(mine.cards);
+    for (const col of theirs.columns) if (!mine.columns.includes(col)) mine.columns.push(col);
+    const added = theirs.cards.filter(c => !B.has(c.title) && !M.has(c.title));
+    for (const c of added.reverse()) mine.cards.unshift({ ...c, tags: [...c.tags] });
+    for (const [title, b] of B) {
+      const m = M.get(title), t = T.get(title);
+      if (!m || !same(m, b)) continue;                                   // this page changed or removed it: the page wins
+      if (!t) mine.cards.splice(mine.cards.indexOf(m), 1);               // removed in the repo
+      else if (!same(t, b)) Object.assign(m, { column: t.column, state: t.state, due: t.due, notes: t.notes, tags: [...t.tags] });
+    }
+    return added.length;
+  }
   // Saves are queued per document so rapid edits never race on the same sha. On a stale sha
-  // the latest file is fetched and the in-memory board (which owns the Open Threads section)
-  // is re-applied on top of it, once.
+  // the latest file is fetched, the repo's own changes are merged into the in-memory board
+  // (mergeBoard), and the result is re-applied on top of the latest file, once.
   const saveQueues = new Map();
   function saveDoc(doc, message) {
     const prev = saveQueues.get(doc.id) || Promise.resolve(true);
@@ -521,7 +541,9 @@ mark{background:color-mix(in srgb,var(--accent-2) 55%,transparent);color:inherit
       return true;
     } catch (e) {
       if ((e.status === 409 || e.status === 422) && retry) {
+        const base = parseDoc(doc.raw).board;   // what this page last saw in the repo
         const { sha, text } = await gh.get(doc.mirror); const fresh = docFrom(doc, text, sha);
+        mergeBoard(doc.board, base, fresh.board);
         Object.assign(doc, fresh, { board: doc.board, inbox: mergeInbox(doc.inbox, fresh.inbox), counts: countCards(doc.board) });
         toast('File changed elsewhere; re-applying your edit on the latest version.'); const ok = await doSave(doc, message, false); if (ok) route(); return ok;
       }
